@@ -1,9 +1,2 @@
-from .token import (
-    Token,
-    TokenType
-)
-
-from .lexer import (
-    Lexer,
-    TokenUnKnownException
-)
+from .token import *
+from .lexer import *
