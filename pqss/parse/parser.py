@@ -1,11 +1,9 @@
-import enum
-import token
-
-from sqss.lex import *
-from .ast import *
+from pqss.lex import *
+from pqss.parse.ast import *
 
 
-class Priority(int):
+# TODO
+class Priority:
     LOWEST = 1
     EQUALS = 2
     LESS_GREATER = 3
@@ -29,6 +27,9 @@ precedences = {
 
 class Parser:
     def __init__(self, lex: Lexer):
+        self.code_path: str | None = None
+
+        self.sqss: StyleSheet | None = None
         self.lexer: Lexer = lex
         self.cur_token: Token | None = None
         self.peek_token: Token | None = None
@@ -59,19 +60,19 @@ class Parser:
         self.cur_token = self.peek_token
         self.peek_token = self.lexer.next_token()
 
-    def parse_sqss(self):
-        sqss = StyleSheet()
-        sqss.statements = []
+    def parse_program(self):
+        self.sqss = StyleSheet()
+        self.sqss.statements = []
 
         while self.peek_token.token_type is not TokenType.EOF:
             stmt = self.parse_stmt()
             if stmt is not None:
-                sqss.statements.append(stmt)
+                self.sqss.statements.append(stmt)
             self.next_token()
-        return sqss
+        return self.sqss
 
     def parse_stmt(self):
-        if self.cur_token.token_type == TokenType.IDENTIFIER and self.peek_token.token_type == TokenType.ASSIGN:
+        if self.cur_token.token_type == TokenType.IDENTIFIER or self.cur_token.token_type == TokenType.PROPERTY and self.peek_token.token_type == TokenType.ASSIGN:
             return self.parse_var_stmt()
         elif self.cur_token.token_type in [TokenType.CLASS_SELECTOR, TokenType.TYPE_SELECTOR]:
             return self.parse_ruleset()
@@ -96,6 +97,15 @@ class Parser:
         var_stmt.value = self.parse_expr_stmt()  # TODO 计算表达式
 
         return var_stmt
+
+    def parse_prop_stmt(self):
+        rule_stmt = Rule()
+        rule_stmt.property = self.cur_token
+        self.next_token()
+        self.next_token()
+        rule_stmt.value = self.parse_expr_stmt()  # TODO 计算表达式
+
+        return rule_stmt
 
     def register_prefix_fn(self, token_type: TokenType, fn):
         self.prefix_parse_fns[token_type] = fn
@@ -137,30 +147,8 @@ class Parser:
 
         return lit
 
-    def parse_ruleset(self):
-        ruleset = Ruleset()
-        ruleset.selector_list = self.parse_selectors()
-
-        if self.peek_token.token_type != TokenType.LEFT_BRACE:
-            return None
-        self.next_token()
-        rules = []
-        child_ruleset_list = []
-        self.next_token()
-        while self.cur_token.token_type != TokenType.RIGHT_BRACE:
-            if self.cur_token.token_type == TokenType.PROPERTY:
-                rule = self.parse_rule()
-                rules.append(rule)
-            else:
-                child_ruleset = self.parse_ruleset()
-                child_ruleset_list.append(child_ruleset)
-            self.next_token()
-        # self.next_token()
-
-        ruleset.rule_list = rules
-        ruleset.child_ruleset = child_ruleset_list
-
-        return ruleset
+    def parse_boolean(self):
+        return Boolean(self.cur_token, self.cur_token.token_type == TokenType.TRUE)
 
     def parse_prefix_expr(self):
         expr = PrefixExpression(self.cur_token, self.cur_token.literal)
@@ -184,9 +172,6 @@ class Parser:
 
         return expr
 
-    def parse_boolean(self):
-        return Boolean(self.cur_token, self.cur_token.token_type == TokenType.TRUE)
-
     def parse_grouped_expr(self):
         self.next_token()
 
@@ -198,74 +183,67 @@ class Parser:
         return expr
 
     def parse_import(self):
-        pass
+        self.next_token()
+        with open(self.cur_token.literal) as f:
+            lex = Lexer(f.read())
+            p = Parser(lex)
+            program = p.parse_program()
+            self.sqss.statements.extend(program.statements)
 
     def parse_mixin(self):
-        mixin = Mixin(self.cur_token)
+        mixin_stmt = Mixin(self.cur_token)
         self.next_token()
-        mixin.name = self.cur_token
+        mixin_stmt.name = self.cur_token.literal
 
         if self.peek_token.token_type == TokenType.LEFT_PAREN:
             self.next_token()
-            mixin.params = self.parse_mixin_params()
+            mixin_stmt.params = self.parse_mixin_params()
             if self.peek_token.token_type != TokenType.RIGHT_PAREN:
                 return None
-        self.next_token()
-        mixin.body = self.parse_block_stmt()
-
-        return mixin
-
-    def parse_include(self):
-        include = Include(self.cur_token)
-
-        self.next_token()
-        include.mixin_name = self.cur_token
-
-        if self.peek_token.token_type == TokenType.LEFT_PAREN:
             self.next_token()
-            include.args = self.parse_mixin_params()
 
-            if self.peek_token.token_type != TokenType.RIGHT_PAREN:
-                return None
-        self.next_token()
-
-        return include
-
-    def parse_extend(self):
-        pass
-
-    def parse_if_stmt(self):
-        stmt = IfStatement(self.cur_token)
-        self.next_token()
-
-        stmt.condition = self.parse_expr(Priority.LOWEST)
+        mixin_stmt.body = Ruleset()
+        mixin_stmt.body.selectors = []
 
         if self.peek_token.token_type != TokenType.LEFT_BRACE:
             return None
-
-        stmt.consequence = self.parse_block_stmt()
-
-        if self.peek_token.token_type == TokenType.ELSE:
+        self.next_token()
+        rules = []
+        child_ruleset_list = []
+        self.next_token()
+        while self.cur_token.token_type != TokenType.RIGHT_BRACE:
+            if self.cur_token.token_type == TokenType.PROPERTY:
+                rule = self.parse_rule()
+                rules.append(rule)
+            else:
+                child_ruleset = self.parse_ruleset()
+                child_ruleset_list.append(child_ruleset)
             self.next_token()
-            if self.peek_token.token_type != TokenType.LEFT_BRACE:
+        # self.next_token()
+
+        mixin_stmt.body.rules = rules
+        mixin_stmt.body.child_rulesets = child_ruleset_list
+
+        return mixin_stmt
+
+    def parse_include(self):
+        include_stmt = Include(self.cur_token)
+
+        self.next_token()
+        include_stmt.mixin_name = self.cur_token.literal
+
+        if self.peek_token.token_type == TokenType.LEFT_PAREN:
+            self.next_token()
+            include_stmt.args = self.parse_include_params()
+
+            if self.peek_token.token_type != TokenType.RIGHT_PAREN:
                 return None
-            stmt.alternative = self.parse_block_stmt()
-
-        return stmt
-
-    def parse_block_stmt(self):
-        block = BlockStatement(self.cur_token)
         self.next_token()
 
-        while self.peek_token.token_type != TokenType.RIGHT_BRACE:
-            self.next_token()
-            stmt = self.parse_stmt()
-            if stmt:
-                block.statements.append(stmt)
+        return include_stmt
 
-        self.next_token()
-
-        return block
+    def parse_extend(self):
+        pass
 
     def parse_mixin_params(self):
         identifiers: list[Identifier] = []
@@ -289,6 +267,28 @@ class Parser:
 
         return identifiers
 
+    def parse_include_params(self):
+        args: list[Identifier] = []
+
+        if self.peek_token.token_type == TokenType.RIGHT_PAREN:
+            return args
+
+        self.next_token()
+
+        arg = self.parse_expr(Priority.LOWEST)
+        args.append(arg)
+
+        while self.peek_token.token_type == TokenType.COMMA:
+            self.next_token()
+            self.next_token()
+            arg = self.parse_expr(Priority.LOWEST)
+            args.append(arg)
+
+        if self.peek_token.token_type != TokenType.RIGHT_PAREN:
+            return None
+
+        return args
+
     def parse_selectors(self):
         selector_list: list[Selector] = []
 
@@ -303,6 +303,34 @@ class Parser:
 
         return selector_list
 
+    def parse_ruleset(self):
+        ruleset = Ruleset()
+        ruleset.selectors = self.parse_selectors()
+
+        if self.peek_token.token_type != TokenType.LEFT_BRACE:
+            return None
+        self.next_token()
+        rules = []
+        child_ruleset_list = []
+        self.next_token()
+        while self.cur_token.token_type != TokenType.RIGHT_BRACE:
+            if self.cur_token.token_type == TokenType.PROPERTY:
+                rule = self.parse_rule()
+                rules.append(rule)
+            elif self.cur_token.token_type == TokenType.INCLUDE:
+                inc = self.parse_include()
+                ruleset.includes.append(inc)
+            else:
+                child_ruleset = self.parse_ruleset()
+                child_ruleset_list.append(child_ruleset)
+            self.next_token()
+        # self.next_token()
+
+        ruleset.rules = rules
+        ruleset.child_rulesets = child_ruleset_list
+
+        return ruleset
+
     def parse_rule(self):
         rule = Rule()
 
@@ -313,3 +341,37 @@ class Parser:
 
         self.next_token()
         return rule
+
+    def parse_if_stmt(self):
+        stmt = IfStatement(self.cur_token)
+        self.next_token()
+
+        stmt.condition = self.parse_expr(Priority.LOWEST)
+
+        if self.peek_token.token_type != TokenType.LEFT_BRACE:
+            return None
+        self.next_token()
+
+        stmt.consequence = self.parse_block_stmt()
+
+        if self.peek_token.token_type == TokenType.ELSE:
+            self.next_token()
+            if self.peek_token.token_type != TokenType.LEFT_BRACE:
+                return None
+            self.next_token()
+            stmt.alternative = self.parse_block_stmt()
+
+        return stmt
+
+    def parse_block_stmt(self):
+        block = BlockStatement(self.cur_token)
+        self.next_token()
+
+        while self.cur_token.token_type != TokenType.RIGHT_BRACE:
+
+            stmt = self.parse_stmt()
+            if stmt:
+                block.statements.append(stmt)
+            self.next_token()  # 分号
+
+        return block

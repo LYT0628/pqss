@@ -1,0 +1,6 @@
+$h : 6;
+@mixin error($a) {width:$a;}
+QPushButton {
+    @include error(5)
+    height: $h;
+}

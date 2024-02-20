@@ -1,0 +1,3 @@
+
+class TokenUnKnownException(Exception):
+    pass

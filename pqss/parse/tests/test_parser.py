@@ -1,9 +1,7 @@
-import enum
 
-from sqss.lex import Lexer, TokenType
-from sqss.parse.ast import Statement, ExpressionStatement
-from sqss.parse.parser import Parser
-
+from pqss.lex import Lexer
+from pqss.parse.ast import *
+from pqss.parse.parser import Parser
 
 def test_var_statement():
     input_str = """
@@ -13,7 +11,7 @@ def test_var_statement():
 
     lexer = Lexer(input_str)
     parser = Parser(lexer)
-    sqss = parser.parse_sqss()
+    sqss = parser.parse_program()
 
     tests = [('$number', '5'),
              ('$number', '$number')]
@@ -39,7 +37,7 @@ def test_int_literal_expr():
 
     lexer = Lexer(input_str)
     parser = Parser(lexer)
-    sqss = parser.parse_sqss()
+    sqss = parser.parse_program()
 
     tests = [('5', 5)]
 
@@ -60,7 +58,7 @@ def test_prefix_expr():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
         assert len(style_sheet.statements) == 1
         assert style_sheet.statements[0].expr.token.literal == test[1]
@@ -79,7 +77,7 @@ def test_infix_expr():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
         assert len(style_sheet.statements) == 1
         assert style_sheet.statements[0].expr.token.literal == test[2]
@@ -93,7 +91,7 @@ def test_boolean_expr():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
         assert len(style_sheet.statements) == 1
         assert style_sheet.statements[0].name.token.literal == test[1]
@@ -106,7 +104,7 @@ def test_boolean_expr2():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
 
 def test_grouped_operator():
@@ -114,7 +112,7 @@ def test_grouped_operator():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
 
 def test_if_stmt_parsing():
@@ -123,7 +121,7 @@ def test_if_stmt_parsing():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
 
 def test_mixin_parsing():
@@ -132,7 +130,7 @@ def test_mixin_parsing():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
         # arg (, arg) (, arg)..
 
@@ -142,7 +140,7 @@ def test_include_parsing():
     for test in tests:
         lexer = Lexer(test[0])
         parser = Parser(lexer)
-        style_sheet = parser.parse_sqss()
+        style_sheet = parser.parse_program()
 
         # arg (, arg) (, arg)...
 
@@ -155,6 +153,5 @@ def test_ruleset_parsing():
         }"""
     lexer = Lexer(test)
     parser = Parser(lexer)
-    style_sheet = parser.parse_sqss()
-    print()
+    style_sheet = parser.parse_program()
     # arg (, arg) (, arg)...

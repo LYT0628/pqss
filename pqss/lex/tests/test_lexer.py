@@ -1,6 +1,55 @@
 import pytest
 
-from sqss.lex import TokenType, Token, Lexer, TokenUnKnownException
+from pqss.lex import TokenType, Token, Lexer, TokenUnKnownException
+
+
+class Example:
+    def __init__(self, src_code: str, expected_token: list[Token]):
+        self.src_code = src_code
+        self.expected_token = expected_token
+
+
+def lex_test(ts: list[Example], predicate):
+    for t in ts:
+        lexer = Lexer(t.src_code)
+        for tok in t.expected_token:
+            assert predicate(lexer.next_token(), tok)
+
+
+def lex_eq_test(ts: list[Example]):
+    lex_test(ts, lambda tok, expected_tok: tok == expected_tok)
+
+
+def test_assign():
+    ts = [Example('$a:5',
+                  [Token(TokenType.IDENTIFIER, '$a'),
+                   Token(TokenType.ASSIGN, ':'),
+                   Token(TokenType.NUMBER, '5')])]
+    lex_eq_test(ts)
+
+
+def test_extend():
+    ts = [Example('@extend', [Token(TokenType.EXTEND, '@extend')])]
+    lex_eq_test(ts)
+
+
+def test_use_variable():
+    ts = [Example("""
+        $number : 5;
+        MyClass {
+            width : $number;
+        }""", [Token(TokenType.IDENTIFIER, '$number'),
+               Token(TokenType.ASSIGN, ':'),
+               Token(TokenType.NUMBER, '5'),
+               Token(TokenType.SEMICOLON, ';'),
+               Token(TokenType.CLASS_SELECTOR, 'MyClass'),
+               Token(TokenType.LEFT_BRACE, '{'),
+               Token(TokenType.PROPERTY, 'width'),
+               Token(TokenType.ASSIGN, ':'),
+               Token(TokenType.IDENTIFIER, '$number'),
+               Token(TokenType.SEMICOLON, ';'),
+               Token(TokenType.RIGHT_BRACE, '}')])]
+    lex_eq_test(ts)
 
 
 def test_next_token():
@@ -13,7 +62,7 @@ def test_next_token():
     input_str += '.ClassS > #SE error[name="XXX"] a:hover '
     input_str += ' .class{left:$a;}& a::indicator QPushButton() QPushButton($a,$b,$c)'
     input_str += """
-        @import "./main.sqss"   // 1. Import 语句
+        @import "./main.pqss"   // 1. Import 语句
         @import "./panel.qss" # 导入
         @extend @mixin @include // 2. 拓展语句   3.混入语句 4. Include语句
         $var0 : 123px; // 变量    // 5. If表达式语句
@@ -104,29 +153,3 @@ def test_unknown_token():
     lexer = Lexer(input_str)
     with pytest.raises(TokenUnKnownException):
         lexer.next_token()
-
-
-def test_lexer():
-    input_str = """
-        $number : 5;
-        MyClass {
-            width : $number;
-        }
-    """
-    expected_tokens = [Token(TokenType.IDENTIFIER, '$number'),
-                       Token(TokenType.ASSIGN, ':'),
-                       Token(TokenType.NUMBER, '5'),
-                       Token(TokenType.SEMICOLON, ';'),
-                       Token(TokenType.CLASS_SELECTOR, 'MyClass'),
-                       Token(TokenType.LEFT_BRACE,'{'),
-                       Token(TokenType.PROPERTY,'width'),
-                       Token(TokenType.ASSIGN,':'),
-                       Token(TokenType.IDENTIFIER,'$number'),
-                       Token(TokenType.SEMICOLON,';'),
-                       Token(TokenType.RIGHT_BRACE,'}')]
-
-    lexer = Lexer(input_str)
-    for expected_token in expected_tokens:
-        tok = lexer.next_token()
-        assert tok.token_type == expected_token.token_type
-        assert tok.literal == expected_token.literal

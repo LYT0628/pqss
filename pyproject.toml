@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "pqss"
+version = "0.0.4"
+requires-python = ">=3.8"
+
+authors = [
+  { name="lyt0628", email="lyt.0628@qq.com" },
+]
+description = "PQSS is a dynamic language for qss, like scss for css."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["pyqt", "qt", "pqss"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Natural Language :: Chinese (Simplified)",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Repository = "https://github.com/LYT0628/pqss"
+Documentation = "http://lyt0628.icu/docs/pqss"
+Issues = "https://github.com/LYT0628/SQSS/pqss"
+"Official Website" = "https://lyt0628.icu/docs/pqss"
