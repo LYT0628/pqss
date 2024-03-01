@@ -2,6 +2,12 @@ from enum import Enum, auto
 
 
 class TokenType(Enum):
+    LEFT_BRACKET = auto()
+    RIGHT_BRACKET = auto()
+    UNION_SELECTOR = auto()
+    BUILTIN = auto()
+    LITERAL = auto()
+    UNIT = auto()
     ILLEGAL = auto()
     """Unknown Token"""
     EOF = auto()
@@ -56,17 +62,18 @@ class TokenType(Enum):
     STRING = auto()
     """String"""
 
-    GENERAL_SELECTOR = auto()  # *
+    UNIVERSAL_SELECTOR = auto()  # *
     TYPE_SELECTOR = auto()  # .MyButton
     CLASS_SELECTOR = auto()  # QPushButton
     ID_SELECTOR = auto()  # #btn
     PROPERTY_SELECTOR = auto()  # QPushButton[name='abc']
-    CHILDREN_SELECTOR = auto()  # >
+    CHILD_SELECTOR = auto()  # >
     GROUP_SELECTOR = auto()  # #a, #b
     PARENT_REFERENCE = auto()
     # POSTERITY_SELECTOR = auto()
     PRODO_SELECTOR = auto()  # 伪类选择器 :hover
     SUBWIDGET_SELECTOR = auto()  # 子组件选择器 ::indicator
+    PROPERTY_CONTAINS_SELECTOR = auto()
     COLOR = auto()
 
     # keywords

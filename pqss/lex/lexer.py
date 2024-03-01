@@ -1,7 +1,9 @@
 import logging
+import re
 
 from .token import Token, TokenType, lookup_keyword, is_color, is_property
-from .utils import is_digit, is_letter, is_white_space
+from .utils import is_letter
+from ..util.char_util import is_digit, is_blank_char
 from .exceptions import TokenUnKnownException
 from .constants import EOF
 
@@ -11,10 +13,16 @@ logger.addHandler(logging.StreamHandler())
 
 class Lexer:
     """Lexer of PQSS"""
+
     def __init__(self, src_code: str):
         """
         :param src_code:  PQSS code
         """
+        self.is_enter_selectors = False
+
+        self.inserted_tok = None
+        self.inserted = None
+
         self._src_code: str = src_code
         self._cur_pos: int = 0
         self._peek_pos: int = 0
@@ -39,6 +47,10 @@ class Lexer:
 
     def next_token(self) -> Token:
         """parse a lexeme to Token"""
+
+        if self.inserted:
+            self.inserted = False
+            return self.inserted_tok
         self._skip_blank_and_comment()
 
         lexeme = self._cur_char
@@ -53,7 +65,12 @@ class Lexer:
             tok = Token(TokenType.LEFT_PAREN, lexeme)
         elif lexeme == ')':
             tok = Token(TokenType.RIGHT_PAREN, lexeme)
+        # elif lexeme == '[':
+        #     tok = Token(TokenType.LEFT_BRACKET, lexeme)
+        # elif lexeme == ']':
+        #     tok = Token(TokenType.RIGHT_BRACKET, lexeme)
         elif lexeme == '{':
+            self.is_enter_selectors = False
             tok = Token(TokenType.LEFT_BRACE, lexeme)
         elif lexeme == '}':
             tok = Token(TokenType.RIGHT_BRACE, lexeme)
@@ -67,11 +84,19 @@ class Lexer:
         elif lexeme == '-':
             tok = Token(TokenType.SUB, lexeme)
         elif lexeme == '*':
-            tok = Token(TokenType.MUL, lexeme)
+            if self.is_infix():
+                tok = Token(TokenType.MUL, lexeme)
+            else:
+                tok = Token(TokenType.UNIVERSAL_SELECTOR, lexeme)
+                self.is_enter_selectors = True
+                self.insert_union_selector_if_needed()
         elif lexeme == '/':
             tok = Token(TokenType.DIV, lexeme)
         elif lexeme == '>':
-            tok = Token(TokenType.GT, lexeme)
+            if self.is_enter_selectors:
+                tok = Token(TokenType.CHILD_SELECTOR, lexeme)
+            else:
+                tok = Token(TokenType.GT, lexeme)
         elif lexeme == '<':
             tok = Token(TokenType.LT, lexeme)
         elif lexeme == '=':
@@ -98,12 +123,15 @@ class Lexer:
         elif lexeme == '.':
             lexeme = self.read_ID_selector()
             tok = Token(TokenType.TYPE_SELECTOR, lexeme)
+            self.is_enter_selectors = True
         elif lexeme == '#':
-            lexeme = self.read_ID_selector()
-            tok = Token(TokenType.ID_SELECTOR, lexeme)
-        elif lexeme == '>':
-            tok = Token(TokenType.CHILDREN_SELECTOR, lexeme)
-
+            if self.is_value():
+                lexeme = self.read_word()
+                tok = Token(TokenType.COLOR, lexeme)
+            else:
+                lexeme = self.read_ID_selector()
+                tok = Token(TokenType.ID_SELECTOR, lexeme)
+                self.is_enter_selectors = True
         elif is_digit(lexeme):
             lexeme = self.read_number()
             tok = Token(TokenType.NUMBER, lexeme)
@@ -112,23 +140,36 @@ class Lexer:
             raise NotImplementedError()
 
         elif is_letter(lexeme):
-            if is_color(lexeme):
-                raise NotImplementedError()
+            if self.peek_word() in ['px']:
+                tok = Token(TokenType.UNIT, self.read_word())
+            elif self.is_color():
+                lexeme = self.read_word()
+                tok = Token(TokenType.COLOR, lexeme)
             elif self.is_property():
                 lexeme = self.read_property()
                 tok = Token(TokenType.PROPERTY, lexeme)
             elif self.is_keyword():
                 tok = self.read_keyword()
+            elif self.is_builtin():
+                lexeme = self.read_word()
+                tok = Token(TokenType.BUILTIN, lexeme)
             elif self.is_mixin_name():
                 lexeme = self.read_identifier()
                 tok = Token(TokenType.IDENTIFIER, lexeme)
             else:
                 tok = self.read_selector()
+                self.is_enter_selectors = True
+                self.insert_union_selector_if_needed()
         else:
             raise TokenUnKnownException(f'Token {lexeme} does unknown!!!')
 
         self.read_char()
         return tok
+
+    def insert_union_selector_if_needed(self):
+        if not is_blank_char(self._peek_char) and self._peek_char not in ['>', '{']:
+            self.inserted = True
+            self.inserted_tok = Token(TokenType.UNION_SELECTOR, '')
 
     def read_identifier(self):
         """read a valid identifier"""
@@ -183,14 +224,14 @@ class Lexer:
         """read the non-prefix selector"""
         pos = self._cur_pos
         token_type = None
-        while is_letter(self.read_char()):
-            pass
+        while is_letter(self._peek_char):
+            self.read_char()
 
         # 属性选择器
-        if self._cur_char == '[':
-            while self._cur_char != ']':
+        if self._peek_char == '[':
+            while self._peek_char != ']':
                 self.read_char()
-            self.read_char()  # 读掉 ]
+            self.read_char()  # 读到 ]
             token_type = TokenType.PROPERTY_SELECTOR
         elif self._cur_char == ':':
             if self.read_char() == ':':
@@ -201,7 +242,8 @@ class Lexer:
                 pass
         else:
             token_type = TokenType.CLASS_SELECTOR
-        return Token(token_type, self._src_code[pos:self._cur_pos])
+
+        return Token(token_type, self._src_code[pos:self._peek_pos])
 
     def read_ID_selector(self):
         """read the selector begin with #"""
@@ -242,14 +284,14 @@ class Lexer:
         i = 0
         while is_letter(self._src_code[self._cur_pos + i]):
             i += 1
-        while is_white_space(self._src_code[self._cur_pos + i]):
+        while is_blank_char(self._src_code[self._cur_pos + i]):
             i += 1
         ch = self._src_code[self._cur_pos + i]
         return ch == '('
 
     def _skip_blank_char(self):
         """skip all the next black chars"""
-        while is_white_space(self._cur_char):
+        while is_blank_char(self._cur_char):
             self.read_char()
 
     def _skip_comment(self):
@@ -280,10 +322,74 @@ class Lexer:
         return self._cur_char == EOF
 
     def read_string(self):
-        pos= self._peek_pos
+        pos = self._peek_pos
         quote = self._cur_char
 
         while self._peek_char != quote:
             self.read_char()
 
         return self._src_code[pos: self._peek_pos]
+
+    def is_color(self):
+        pos = self._cur_pos
+
+        while is_letter(self._peek_char):
+            self.read_char()
+
+        lexeme = self._src_code[pos: self._peek_pos]
+        self._cur_pos = pos
+        self._cur_char = self._src_code[self._cur_pos]
+        self._peek_pos = pos + 1
+        self._peek_char = self._src_code[self._peek_pos]
+
+        return is_color(lexeme)
+
+    def read_word(self):
+        pos = self._cur_pos
+        while is_letter(self._peek_char):
+            self.read_char()
+        lexeme = self._src_code[pos: self._peek_pos]
+
+        return lexeme
+
+    def is_value(self):
+        i = 0
+        while not is_blank_char(self._src_code[self._cur_pos + i]) and self._src_code[self._cur_pos + i] != ';':
+            i += 1
+        ch = self._src_code[self._cur_pos + i]
+        return ch == ';'
+
+    def is_builtin(self):
+        pos = self._cur_pos
+
+        while is_letter(self._peek_char):
+            self.read_char()
+
+        lexeme = self._src_code[pos: self._peek_pos]
+        self._cur_pos = pos
+        self._cur_char = self._src_code[self._cur_pos]
+        self._peek_pos = pos + 1
+        self._peek_char = self._src_code[self._peek_pos]
+
+        return lexeme in ['rgb', 'rgba']
+
+    def is_infix(self):
+        i = 0
+        while is_blank_char(self._src_code[self._peek_pos + i]):
+            i += 1
+        ch = self._src_code[self._peek_pos + i]
+        return is_digit(ch)
+
+    def peek_word(self):
+        pos = self._cur_pos
+
+        while is_letter(self._peek_char):
+            self.read_char()
+
+        lexeme = self._src_code[pos: self._peek_pos]
+        self._cur_pos = pos
+        self._cur_char = self._src_code[self._cur_pos]
+        self._peek_pos = pos + 1
+        self._peek_char = self._src_code[self._peek_pos]
+
+        return lexeme

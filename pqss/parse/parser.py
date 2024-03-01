@@ -1,5 +1,8 @@
+from .. import util
+
 from pqss.lex import *
 from pqss.parse.ast import *
+
 
 
 # TODO
@@ -41,6 +44,8 @@ class Parser:
         self.infix_parse_fns = {}
 
         self.register_prefix_fn(TokenType.IDENTIFIER, self.parse_identifier)
+        self.register_prefix_fn(TokenType.COLOR, self.parse_color)
+        self.register_prefix_fn(TokenType.BUILTIN, self.parse_builtin)
         self.register_prefix_fn(TokenType.NUMBER, self.parse_integer_literal)
         self.register_prefix_fn(TokenType.SUB, self.parse_prefix_expr)
         self.register_prefix_fn(TokenType.TRUE, self.parse_boolean)
@@ -56,9 +61,10 @@ class Parser:
         self.register_infix_fn(TokenType.LT, self.parse_infix_expr)
         self.register_infix_fn(TokenType.GT, self.parse_infix_expr)
 
-    def next_token(self):
+    def next_token(self) -> Token:
         self.cur_token = self.peek_token
         self.peek_token = self.lexer.next_token()
+        return self.cur_token
 
     def parse_program(self):
         self.sqss = StyleSheet()
@@ -74,7 +80,7 @@ class Parser:
     def parse_stmt(self):
         if self.cur_token.token_type == TokenType.IDENTIFIER or self.cur_token.token_type == TokenType.PROPERTY and self.peek_token.token_type == TokenType.ASSIGN:
             return self.parse_var_stmt()
-        elif self.cur_token.token_type in [TokenType.CLASS_SELECTOR, TokenType.TYPE_SELECTOR]:
+        elif util.is_selector_tok(self.cur_token):
             return self.parse_ruleset()
         elif self.cur_token.token_type == TokenType.IMPORT:
             return self.parse_import()
@@ -134,11 +140,20 @@ class Parser:
 
             self.next_token()
             left_expr = infix(left_expr)
-
         return left_expr
 
     def parse_identifier(self):
         return Identifier(self.cur_token, self.cur_token.literal)
+
+    def parse_color(self):
+        return Color(self.cur_token)
+
+    def parse_builtin(self):
+        lexeme = self.cur_token
+        self.next_token()
+        args = self.parse_include_params()
+        self.next_token()
+        return Builtin(lexeme, args)
 
     def parse_integer_literal(self):
         lit = IntegerLiteral(self.cur_token)
@@ -338,6 +353,8 @@ class Parser:
         self.next_token()
         self.next_token()
         rule.value = self.parse_expr(Priority.LOWEST)  # TODO 计算表达式
+        if util.expect_token_type(self.peek_token, TokenType.UNIT):
+            rule.unit = Unit(self.next_token())
 
         self.next_token()
         return rule

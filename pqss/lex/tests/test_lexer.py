@@ -121,7 +121,7 @@ def test_next_token():
                        Token(TokenType.IMPORT, '@import'),
                        Token(TokenType.ID_SELECTOR, '#IDSelector'),
                        Token(TokenType.TYPE_SELECTOR, '.ClassS'),
-                       Token(TokenType.CHILDREN_SELECTOR, '>'),
+                       Token(TokenType.CHILD_SELECTOR, '>'),
                        Token(TokenType.ID_SELECTOR, '#SE'),
                        Token(TokenType.PROPERTY_SELECTOR, 'error[name="XXX"]'),
                        Token(TokenType.PRODO_SELECTOR, 'a:hover'),

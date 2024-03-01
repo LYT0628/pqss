@@ -10,6 +10,12 @@ class Node:
         pass
 
 
+class BlankNode(Node):
+
+    def eval(self, environment: Environment):
+        return ''
+
+
 class Statement(Node):
     @abc.abstractmethod
     def stmt_node(self):
@@ -119,5 +125,3 @@ class IfStatement(Statement):
 
     def stmt_node(self):
         pass
-
-

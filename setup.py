@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='PQSS',
-    packages=['pqss', 'pqss.env', 'pqss.lex', 'pqss.parse', 'pqss.parse.ast'],
+    packages=['pqss', 'pqss.env', 'pqss.lex', 'pqss.parse', 'pqss.parse.ast', 'pqss.util'],
     author='lyt0628',
     author_email='lyt.0628@qq.com',
     url='http://lyt0628.icu/docs/pqss',

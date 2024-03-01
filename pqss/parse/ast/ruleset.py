@@ -1,6 +1,6 @@
 
 from pqss.env import Environment
-from pqss.lex import Token
+from pqss.lex import Token, TokenType
 from .ast import (
     Statement,
     Expression,
@@ -8,6 +8,7 @@ from .ast import (
 from .selector import Selector
 from .rule import Rule
 from .include import Include
+from ... import util
 
 
 class Ruleset(Statement):
@@ -26,15 +27,37 @@ class Ruleset(Statement):
 
     def _eval_selectors(self, environment):
         res = ''
-        for selector in self.selectors:
-            res += ' ' + selector.eval(environment)
+        idx = 0
+        while idx < len(self.selectors):
+            selector = self.selectors[idx]
+            res += selector.eval(environment)
+            if idx < len(self.selectors) - 1:
+                peek = self.selectors[idx + 1]
+                if util.expect_token_type(peek.token, TokenType.UNION_SELECTOR):
+                    idx += 1
+                else:
+                    res += ' '
+            idx += 1
+
         return res
 
     def _eval_child_rulesets(self, environment):
+        if len(self.child_rulesets) == 0:
+            return ''
+
         res = ''
 
-        for selector in self.selectors[:-2]:
+        idx = 0
+        while idx < len(self.selectors) - 1:
+            selector = self.selectors[idx]
             res += selector.eval(environment)
+            if idx < len(self.selectors) - 1:
+                peek = self.selectors[idx + 1]
+                if util.expect_token_type(peek.token, TokenType.UNION_SELECTOR):
+                    idx += 1
+                else:
+                    res += ' '
+            idx += 1
 
         for ruleset in self.child_rulesets:
             val = ruleset.eval(environment)
@@ -43,7 +66,7 @@ class Ruleset(Statement):
                 val = val.replace('&', self.selectors[-1].eval(environment))
                 res += ' ' + val
             else:
-                res += self.selectors[-1].eval(environment) + val
+                res += self.selectors[-1].eval(environment) + ' ' + val
 
         return res
 
